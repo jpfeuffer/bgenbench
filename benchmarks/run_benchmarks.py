@@ -46,7 +46,16 @@ def _get_offsets_from_bgi(path: Path, limit: int | None = None) -> list[int]:
 def _safe_backend(name: str, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return {"name": name, "status": "ok", "metrics": run()}
-    except Exception as exc:  # noqa: BLE001
+    except (
+        BenchmarkError,
+        ImportError,
+        ModuleNotFoundError,
+        OSError,
+        RuntimeError,
+        sqlite3.Error,
+        subprocess.SubprocessError,
+        ValueError,
+    ) as exc:
         return {"name": name, "status": "error", "error": str(exc)}
 
 
@@ -163,7 +172,8 @@ def _bench_gavin(cfg: BenchmarkConfig) -> dict[str, Any]:
     def consecutive() -> None:
         chrom = str(rows[0][0])
         start = int(rows[0][1])
-        stop = int(rows[min(len(rows) - 1, 256)][1])
+        stop_index = min(256, len(rows) - 1)
+        stop = int(rows[stop_index][1])
         run_cmd("-incl-range", f"{chrom}:{start}-{stop}")
 
     random_rows = [rng.choice(rows) for _ in range(min(128, len(rows)))]
@@ -177,7 +187,10 @@ def _bench_gavin(cfg: BenchmarkConfig) -> dict[str, Any]:
             run_cmd("-incl-range", f"{chrom}:{pos}-{int(pos) + 10000}")
 
     def full_load() -> None:
-        run_cmd("-list")
+        start = int(rows[0][1])
+        end = int(rows[-1][1])
+        chrom = str(rows[0][0])
+        run_cmd("-incl-range", f"{chrom}:{start}-{end}")
 
     return {
         "metadata": _timed(metadata),

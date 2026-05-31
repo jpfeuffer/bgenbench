@@ -27,8 +27,8 @@ clone_if_missing "https://github.com/limix/bgen.git" "${THIRD_PARTY_DIR}/limix-b
 clone_if_missing "https://github.com/limix/cbgen.git" "${THIRD_PARTY_DIR}/limix-cbgen"
 clone_if_missing "https://github.com/gavinband/bgen.git" "${THIRD_PARTY_DIR}/gavinband-bgen"
 
-python -m venv "${VENV_DIR}/jeremy"
-python -m venv "${VENV_DIR}/limix"
+python3 -m venv "${VENV_DIR}/jeremy"
+python3 -m venv "${VENV_DIR}/limix"
 
 "${VENV_DIR}/jeremy/bin/pip" install --upgrade pip setuptools wheel cython numpy
 "${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/jeremymcrae-bgen"
