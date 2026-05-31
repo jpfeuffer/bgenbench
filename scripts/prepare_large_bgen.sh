@@ -6,7 +6,7 @@ DATA_DIR="${ROOT_DIR}/data"
 TOOLS_DIR="${ROOT_DIR}/tools"
 mkdir -p "${DATA_DIR}" "${TOOLS_DIR}"
 
-: "${BGENBENCH_VCF_URL:=https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz}"
+: "${BGENBENCH_VCF_URL:=https://ftp.ncbi.nlm.nih.gov/1000genomes/ftp/release/20130502/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz}"
 : "${BGENBENCH_DATASET_PREFIX:=${DATA_DIR}/chr1_1000g}"
 : "${BGENBENCH_MIN_BGEN_BYTES:=1000000000}"
 : "${BGENBENCH_BGEN_URL:=}"
@@ -21,7 +21,7 @@ if [[ ! -x "${PLINK2_BIN}" ]]; then
   if command -v plink2 >/dev/null 2>&1; then
     PLINK2_BIN="$(command -v plink2)"
   else
-    curl -fsSL -o "${TOOLS_DIR}/plink2.zip" "https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_avx2_20250129.zip"
+    curl -fsSL -o "${TOOLS_DIR}/plink2.zip" "https://s3.amazonaws.com/plink2-assets/alpha5/plink2_linux_avx2_20260425.zip"
     unzip -o "${TOOLS_DIR}/plink2.zip" -d "${TOOLS_DIR}"
     chmod +x "${PLINK2_BIN}"
   fi
