@@ -222,57 +222,59 @@ def _bench_plink2(cfg: BenchmarkConfig) -> dict[str, Any]:
         raise BenchmarkError("no chromosome/position data in index")
 
     rng = random.Random(cfg.random_seed)
-    tmpdir = Path(tempfile.mkdtemp())
 
-    base_args = [
-        "--bgen", str(cfg.bgen_path), "ref-first",
-        "--sample", str(sample_path),
-        "--allow-extra-chr",
-        "--no-psam-pheno",
-    ]
+    with tempfile.TemporaryDirectory() as _tmpdir:
+        tmpdir = Path(_tmpdir)
 
-    def run_plink2(*args: str) -> None:
-        subprocess.run(
-            [plink2_bin, *base_args, "--out", str(tmpdir / "plink2_bench"), *args],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        base_args = [
+            "--bgen", str(cfg.bgen_path), "ref-first",
+            "--sample", str(sample_path),
+            "--allow-extra-chr",
+            "--no-psam-pheno",
+        ]
 
-    chrom0 = str(rows[0][0])
-    pos0 = int(rows[0][1])
+        def run_plink2(*args: str) -> None:
+            subprocess.run(
+                [plink2_bin, *base_args, "--out", str(tmpdir / "plink2_bench"), *args],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
-    def metadata() -> None:
-        run_plink2("--chr", chrom0, "--from-bp", str(pos0), "--to-bp", str(pos0), "--freq")
+        chrom0 = str(rows[0][0])
+        pos0 = int(rows[0][1])
 
-    def consecutive() -> None:
-        chrom = str(rows[0][0])
-        start = int(rows[0][1])
-        stop_index = min(256, len(rows) - 1)
-        stop = int(rows[stop_index][1])
-        run_plink2("--chr", chrom, "--from-bp", str(start), "--to-bp", str(stop), "--freq")
+        def metadata() -> None:
+            run_plink2("--chr", chrom0, "--from-bp", str(pos0), "--to-bp", str(pos0), "--freq")
 
-    random_rows = [rng.choice(rows) for _ in range(min(128, len(rows)))]
+        def consecutive() -> None:
+            chrom = str(rows[0][0])
+            start = int(rows[0][1])
+            stop_index = min(256, len(rows) - 1)
+            stop = int(rows[stop_index][1])
+            run_plink2("--chr", chrom, "--from-bp", str(start), "--to-bp", str(stop), "--freq")
 
-    def random_single() -> None:
-        for chrom, pos in random_rows:
-            run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos)), "--freq")
+        random_rows = [rng.choice(rows) for _ in range(min(128, len(rows)))]
 
-    def random_slices() -> None:
-        for chrom, pos in random_rows[:64]:
-            run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos) + 10000), "--freq")
+        def random_single() -> None:
+            for chrom, pos in random_rows:
+                run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos)), "--freq")
 
-    def full_load() -> None:
-        run_plink2("--freq")
+        def random_slices() -> None:
+            for chrom, pos in random_rows[:64]:
+                run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos) + 10000), "--freq")
 
-    return {
-        "metadata": _timed(metadata),
-        "consecutive_slices": _timed(consecutive),
-        "random_single": _timed(random_single),
-        "random_slices": _timed(random_slices),
-        "full_load": _timed(full_load),
-        "notes": f"positions={len(rows)}",
-    }
+        def full_load() -> None:
+            run_plink2("--freq")
+
+        return {
+            "metadata": _timed(metadata),
+            "consecutive_slices": _timed(consecutive),
+            "random_single": _timed(random_single),
+            "random_slices": _timed(random_slices),
+            "full_load": _timed(full_load),
+            "notes": f"positions={len(rows)}",
+        }
 
 
 def parse_args(argv: list[str]) -> BenchmarkConfig:
