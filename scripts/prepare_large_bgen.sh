@@ -18,9 +18,13 @@ VCF_PATH="${DATA_DIR}/$(basename "${BGENBENCH_VCF_URL}")"
 PLINK2_BIN="${TOOLS_DIR}/plink2"
 
 if [[ ! -x "${PLINK2_BIN}" ]]; then
-  curl -fsSL -o "${TOOLS_DIR}/plink2.zip" "https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_avx2_20250129.zip"
-  unzip -o "${TOOLS_DIR}/plink2.zip" -d "${TOOLS_DIR}"
-  chmod +x "${PLINK2_BIN}"
+  if command -v plink2 >/dev/null 2>&1; then
+    PLINK2_BIN="$(command -v plink2)"
+  else
+    curl -fsSL -o "${TOOLS_DIR}/plink2.zip" "https://s3.amazonaws.com/plink2-assets/alpha6/plink2_linux_avx2_20250129.zip"
+    unzip -o "${TOOLS_DIR}/plink2.zip" -d "${TOOLS_DIR}"
+    chmod +x "${PLINK2_BIN}"
+  fi
 fi
 
 if [[ -n "${BGENBENCH_BGEN_URL}" ]]; then
