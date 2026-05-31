@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 import random
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +56,7 @@ def _safe_backend(name: str, run: Callable[[], dict[str, Any]]) -> dict[str, Any
         RuntimeError,
         sqlite3.Error,
         subprocess.SubprocessError,
+        TypeError,
         ValueError,
     ) as exc:
         return {"name": name, "status": "error", "error": str(exc)}
@@ -76,7 +79,7 @@ def _bench_jeremy(cfg: BenchmarkConfig) -> dict[str, Any]:
         def consecutive() -> None:
             width = min(64, variant_count)
             for start in range(0, min(variant_count, 1024), width):
-                for variant in reader[start : min(start + width, variant_count)]:
+                for variant in reader[int(start) : int(min(start + width, variant_count))]:
                     _ = variant.minor_allele_dosage
 
         random_ids = [rng.randrange(variant_count) for _ in range(min(128, variant_count))]
@@ -87,7 +90,7 @@ def _bench_jeremy(cfg: BenchmarkConfig) -> dict[str, Any]:
 
         def random_slices() -> None:
             for index in random_ids[:64]:
-                for variant in reader[index : min(index + 8, variant_count)]:
+                for variant in reader[int(index) : int(min(index + 8, variant_count))]:
                     _ = variant.minor_allele_dosage
 
         def full_load() -> None:
@@ -202,6 +205,76 @@ def _bench_gavin(cfg: BenchmarkConfig) -> dict[str, Any]:
     }
 
 
+def _bench_plink2(cfg: BenchmarkConfig) -> dict[str, Any]:
+    plink2_bin = shutil.which("plink2")
+    if plink2_bin is None:
+        raise BenchmarkError("plink2 not found in PATH")
+
+    sample_path = cfg.bgen_path.with_suffix(".sample")
+    if not sample_path.exists():
+        raise BenchmarkError(f"missing sample file at {sample_path}")
+
+    with sqlite3.connect(cfg.bgi_path) as conn:
+        rows = conn.execute(
+            "SELECT chromosome, position FROM Variant ORDER BY position LIMIT 2048"
+        ).fetchall()
+    if not rows:
+        raise BenchmarkError("no chromosome/position data in index")
+
+    rng = random.Random(cfg.random_seed)
+    tmpdir = Path(tempfile.mkdtemp())
+
+    base_args = [
+        "--bgen", str(cfg.bgen_path), "ref-first",
+        "--sample", str(sample_path),
+        "--allow-extra-chr",
+        "--no-psam-pheno",
+    ]
+
+    def run_plink2(*args: str) -> None:
+        subprocess.run(
+            [plink2_bin, *base_args, "--out", str(tmpdir / "plink2_bench"), *args],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    chrom0 = str(rows[0][0])
+    pos0 = int(rows[0][1])
+
+    def metadata() -> None:
+        run_plink2("--chr", chrom0, "--from-bp", str(pos0), "--to-bp", str(pos0), "--freq")
+
+    def consecutive() -> None:
+        chrom = str(rows[0][0])
+        start = int(rows[0][1])
+        stop_index = min(256, len(rows) - 1)
+        stop = int(rows[stop_index][1])
+        run_plink2("--chr", chrom, "--from-bp", str(start), "--to-bp", str(stop), "--freq")
+
+    random_rows = [rng.choice(rows) for _ in range(min(128, len(rows)))]
+
+    def random_single() -> None:
+        for chrom, pos in random_rows:
+            run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos)), "--freq")
+
+    def random_slices() -> None:
+        for chrom, pos in random_rows[:64]:
+            run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos) + 10000), "--freq")
+
+    def full_load() -> None:
+        run_plink2("--freq")
+
+    return {
+        "metadata": _timed(metadata),
+        "consecutive_slices": _timed(consecutive),
+        "random_single": _timed(random_single),
+        "random_slices": _timed(random_slices),
+        "full_load": _timed(full_load),
+        "notes": f"positions={len(rows)}",
+    }
+
+
 def parse_args(argv: list[str]) -> BenchmarkConfig:
     parser = argparse.ArgumentParser(description="Run BGEN backend benchmarks")
     parser.add_argument("--bgen", required=True, type=Path)
@@ -234,6 +307,7 @@ def main(argv: list[str]) -> int:
             _safe_backend("jeremymcrae/bgen", lambda: _bench_jeremy(cfg)),
             _safe_backend("limix/cbgen", lambda: _bench_cbgen(cfg)),
             _safe_backend("gavinband/bgen", lambda: _bench_gavin(cfg)),
+            _safe_backend("plink2", lambda: _bench_plink2(cfg)),
         ],
     }
 
