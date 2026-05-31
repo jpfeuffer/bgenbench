@@ -31,7 +31,7 @@ jobs:
       # ── Cache: built BGEN libraries ──────────────────────────────────────
       - name: Restore cached BGEN libraries
         id: cache-libs
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             third_party
@@ -42,7 +42,7 @@ jobs:
       # ── Cache: plink2 binary ─────────────────────────────────────────────
       - name: Restore cached plink2
         id: cache-plink2
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: tools/plink2
           key: ${{ runner.os }}-plink2-20260504
@@ -50,7 +50,7 @@ jobs:
       # ── Cache: large benchmark dataset ───────────────────────────────────
       - name: Restore cached benchmark dataset
         id: cache-data
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: data
           key: ${{ runner.os }}-bgen-data-${{ hashFiles('scripts/prepare_large_bgen.sh') }}
@@ -72,3 +72,28 @@ jobs:
           path: |
             outputs/report.html
             outputs/results.json
+
+      # ── Save caches (always, even if benchmark failed) ───────────────────
+      - name: Save BGEN libraries cache
+        if: always() && steps.cache-libs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            third_party
+            build
+            .venv
+          key: ${{ steps.cache-libs.outputs.cache-primary-key }}
+
+      - name: Save plink2 cache
+        if: always() && steps.cache-plink2.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: tools/plink2
+          key: ${{ steps.cache-plink2.outputs.cache-primary-key }}
+
+      - name: Save benchmark dataset cache
+        if: always() && steps.cache-data.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: ${{ steps.cache-data.outputs.cache-primary-key }}

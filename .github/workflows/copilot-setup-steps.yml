@@ -40,7 +40,7 @@ jobs:
       # ── Cache: built BGEN libraries ──────────────────────────────────────
       - name: Restore cached BGEN libraries
         id: cache-libs
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             third_party
@@ -61,7 +61,7 @@ jobs:
       # ── Cache: plink2 binary ─────────────────────────────────────────────
       - name: Restore cached plink2
         id: cache-plink2
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: tools/plink2
           key: ${{ runner.os }}-plink2-20260504
@@ -81,7 +81,7 @@ jobs:
       # ── Cache: small test BGEN ───────────────────────────────────────────
       - name: Restore cached test BGEN
         id: cache-test-bgen
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             data/test_small.bgen
@@ -113,3 +113,31 @@ jobs:
         run: |
           chmod +x scripts/run_smoke_test.sh
           scripts/run_smoke_test.sh
+
+      # ── Save caches (always, even if smoke test failed) ───────────────────
+      - name: Save BGEN libraries cache
+        if: always() && steps.cache-libs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            third_party
+            build
+            .venv
+          key: ${{ steps.cache-libs.outputs.cache-primary-key }}
+
+      - name: Save plink2 cache
+        if: always() && steps.cache-plink2.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: tools/plink2
+          key: ${{ steps.cache-plink2.outputs.cache-primary-key }}
+
+      - name: Save test BGEN cache
+        if: always() && steps.cache-test-bgen.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/test_small.bgen
+            data/test_small.bgen.bgi
+            data/test_small.sample
+          key: ${{ steps.cache-test-bgen.outputs.cache-primary-key }}
