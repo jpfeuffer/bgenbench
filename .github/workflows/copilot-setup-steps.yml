@@ -98,7 +98,7 @@ jobs:
           tools/plink2 \
             --vcf /tmp/test_small.vcf \
             --max-alleles 2 \
-            --export bgen-1.2 compression=zlib \
+            --export bgen-1.2 \
             --out data/test_small \
             --double-id \
             --allow-extra-chr

@@ -40,7 +40,7 @@ else
   fi
 
   if [[ ! -f "${BGEN_PATH}" ]]; then
-    "${PLINK2_BIN}" --vcf "${VCF_PATH}" --max-alleles 2 --export bgen-1.2 compression=zlib --out "${BGENBENCH_DATASET_PREFIX}" --double-id --allow-extra-chr
+    "${PLINK2_BIN}" --vcf "${VCF_PATH}" --max-alleles 2 --export bgen-1.2 --out "${BGENBENCH_DATASET_PREFIX}" --double-id --allow-extra-chr
   fi
 fi
 

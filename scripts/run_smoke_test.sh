@@ -43,7 +43,7 @@ if [[ ! -f "${BGEN_PATH}" ]]; then
   "${PLINK2_BIN}" \
     --vcf "${VCF_TMP}" \
     --max-alleles 2 \
-    --export bgen-1.2 compression=zlib \
+    --export bgen-1.2 \
     --out "${SMALL_PREFIX}" \
     --double-id \
     --allow-extra-chr
