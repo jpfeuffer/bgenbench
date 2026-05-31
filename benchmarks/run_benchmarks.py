@@ -24,6 +24,7 @@ class BenchmarkConfig:
     full_load_max_variants: int
     random_seed: int
     gavin_bgenix: Path
+    plink2_bin: Path | None
 
 
 class BenchmarkError(RuntimeError):
@@ -206,9 +207,13 @@ def _bench_gavin(cfg: BenchmarkConfig) -> dict[str, Any]:
 
 
 def _bench_plink2(cfg: BenchmarkConfig) -> dict[str, Any]:
-    plink2_bin = shutil.which("plink2")
-    if plink2_bin is None:
-        raise BenchmarkError("plink2 not found in PATH")
+    if cfg.plink2_bin is not None and cfg.plink2_bin.is_file():
+        plink2_bin = str(cfg.plink2_bin)
+    else:
+        found = shutil.which("plink2")
+        if found is None:
+            raise BenchmarkError("plink2 not found")
+        plink2_bin = found
 
     sample_path = cfg.bgen_path.with_suffix(".sample")
     if not sample_path.exists():
@@ -285,6 +290,7 @@ def parse_args(argv: list[str]) -> BenchmarkConfig:
     parser.add_argument("--full-load-max-variants", type=int, default=2000)
     parser.add_argument("--random-seed", type=int, default=1)
     parser.add_argument("--gavin-bgenix", type=Path, required=True)
+    parser.add_argument("--plink2-bin", type=Path, default=None)
     args = parser.parse_args(argv)
     return BenchmarkConfig(
         bgen_path=args.bgen,
@@ -293,6 +299,7 @@ def parse_args(argv: list[str]) -> BenchmarkConfig:
         full_load_max_variants=args.full_load_max_variants,
         random_seed=args.random_seed,
         gavin_bgenix=args.gavin_bgenix,
+        plink2_bin=args.plink2_bin,
     )
 
 
