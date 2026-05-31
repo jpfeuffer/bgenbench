@@ -1,0 +1,47 @@
+name: bgenbench
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config zlib1g-dev libzstd-dev libsqlite3-dev curl unzip
+
+      - name: Run benchmark
+        env:
+          BGENBENCH_CFLAGS: "-O3 -DNDEBUG -fPIC"
+          BGENBENCH_CXXFLAGS: "-O3 -DNDEBUG -fPIC"
+          BGENBENCH_FULL_LOAD_MAX_VARIANTS: "2000"
+          BGENBENCH_MIN_BGEN_BYTES: "1000000000"
+        run: |
+          chmod +x scripts/*.sh
+          scripts/run_benchmarks.sh
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bgenbench-report
+          path: |
+            outputs/report.html
+            outputs/results.json
