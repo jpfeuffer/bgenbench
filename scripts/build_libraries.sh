@@ -18,7 +18,7 @@ clone_if_missing() {
   local repo_url="$1"
   local target="$2"
   if [[ ! -d "${target}/.git" ]]; then
-    git clone "${repo_url}" "${target}"
+    git clone --recurse-submodules "${repo_url}" "${target}"
   fi
 }
 
