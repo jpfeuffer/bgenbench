@@ -26,6 +26,9 @@ clone_if_missing "https://github.com/jeremymcrae/bgen.git" "${THIRD_PARTY_DIR}/j
 clone_if_missing "https://github.com/limix/bgen.git" "${THIRD_PARTY_DIR}/limix-bgen"
 clone_if_missing "https://github.com/limix/cbgen.git" "${THIRD_PARTY_DIR}/limix-cbgen"
 clone_if_missing "https://github.com/gavinband/bgen.git" "${THIRD_PARTY_DIR}/gavinband-bgen"
+if [[ -f "${THIRD_PARTY_DIR}/gavinband-bgen/src/View.cpp" ]]; then
+  sed -i 's/std::ios::streampos origin = m_stream->tellg() ;/std::streampos origin = m_stream->tellg() ;/' "${THIRD_PARTY_DIR}/gavinband-bgen/src/View.cpp"
+fi
 
 python3 -m venv "${VENV_DIR}/jeremy"
 python3 -m venv "${VENV_DIR}/limix"
