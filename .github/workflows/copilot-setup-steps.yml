@@ -37,8 +37,20 @@ jobs:
             zlib1g-dev libzstd-dev libsqlite3-dev \
             curl unzip git
 
+      # ── Cache: built BGEN libraries ──────────────────────────────────────
+      - name: Restore cached BGEN libraries
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party
+            build
+            .venv
+          key: ${{ runner.os }}-bgen-libs-O2-${{ hashFiles('scripts/build_libraries.sh') }}
+
       # ── Build all three BGEN libraries from source ───────────────────────
       - name: Build BGEN libraries
+        if: steps.cache-libs.outputs.cache-hit != 'true'
         env:
           BGENBENCH_CFLAGS: "-O2 -DNDEBUG -fPIC"
           BGENBENCH_CXXFLAGS: "-O2 -DNDEBUG -fPIC"
@@ -46,20 +58,40 @@ jobs:
           chmod +x scripts/build_libraries.sh
           scripts/build_libraries.sh
 
-      # ── Download plink2 ──────────────────────────────────────────────────
+      # ── Cache: plink2 binary ─────────────────────────────────────────────
+      - name: Restore cached plink2
+        id: cache-plink2
+        uses: actions/cache@v4
+        with:
+          path: tools/plink2
+          key: ${{ runner.os }}-plink2-20260504
+
       - name: Download plink2
+        if: steps.cache-plink2.outputs.cache-hit != 'true'
         run: |
           mkdir -p tools
-          if [[ ! -x tools/plink2 ]]; then
-            curl -fsSL -o tools/plink2.zip \
-              "https://s3.amazonaws.com/plink2-assets/alpha7/plink2_linux_avx2_20260504.zip"
-            unzip -o tools/plink2.zip -d tools
-            chmod +x tools/plink2
-          fi
-          tools/plink2 --version
+          curl -fsSL -o tools/plink2.zip \
+            "https://s3.amazonaws.com/plink2-assets/alpha7/plink2_linux_avx2_20260504.zip"
+          unzip -o tools/plink2.zip -d tools
+          chmod +x tools/plink2
+
+      - name: Verify plink2
+        run: tools/plink2 --version
+
+      # ── Cache: small test BGEN ───────────────────────────────────────────
+      - name: Restore cached test BGEN
+        id: cache-test-bgen
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/test_small.bgen
+            data/test_small.bgen.bgi
+            data/test_small.sample
+          key: ${{ runner.os }}-test-bgen-${{ hashFiles('scripts/generate_test_bgen.py') }}
 
       # ── Generate a small synthetic BGEN for smoke testing ────────────────
       - name: Generate small test BGEN
+        if: steps.cache-test-bgen.outputs.cache-hit != 'true'
         run: |
           mkdir -p data
           python3 scripts/generate_test_bgen.py > /tmp/test_small.vcf
@@ -72,7 +104,9 @@ jobs:
             --allow-extra-chr
           third_party/gavinband-bgen/build/apps/bgenix \
             -g data/test_small.bgen -index
-          ls -lh data/test_small.*
+
+      - name: List test BGEN files
+        run: ls -lh data/test_small.*
 
       # ── Verify smoke-test benchmark runs cleanly against all backends ─────
       - name: Run smoke-test benchmark

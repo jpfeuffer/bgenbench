@@ -26,7 +26,34 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config zlib1g-dev libzstd-dev libsqlite3-dev curl unzip
+          sudo apt-get install -y build-essential cmake pkg-config zlib1g-dev libzstd-dev libsqlite3-dev curl unzip git
+
+      # ── Cache: built BGEN libraries ──────────────────────────────────────
+      - name: Restore cached BGEN libraries
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party
+            build
+            .venv
+          key: ${{ runner.os }}-bgen-libs-O3-${{ hashFiles('scripts/build_libraries.sh') }}
+
+      # ── Cache: plink2 binary ─────────────────────────────────────────────
+      - name: Restore cached plink2
+        id: cache-plink2
+        uses: actions/cache@v4
+        with:
+          path: tools/plink2
+          key: ${{ runner.os }}-plink2-20260504
+
+      # ── Cache: large benchmark dataset ───────────────────────────────────
+      - name: Restore cached benchmark dataset
+        id: cache-data
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: ${{ runner.os }}-bgen-data-${{ hashFiles('scripts/prepare_large_bgen.sh') }}
 
       - name: Run benchmark
         env:
