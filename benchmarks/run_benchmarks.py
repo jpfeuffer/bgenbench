@@ -51,8 +51,8 @@ def _get_genotype_offsets(bgen_path: Path, bgi_path: Path, limit: int | None = N
     import cbgen  # type: ignore
     from cbgen._ffi import ffi, lib  # type: ignore
 
-    mf_path = Path(tempfile.mktemp(suffix=".metafile"))
-    try:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mf_path = Path(tmpdir) / "variants.metafile"
         with cbgen.bgen_file(bgen_path) as bgen:
             bgen.create_metafile(mf_path)
         mf = lib.bgen_metafile_open(bytes(mf_path))
@@ -66,9 +66,6 @@ def _get_genotype_offsets(bgen_path: Path, bgi_path: Path, limit: int | None = N
                 offsets.append(int(vm.genotype_offset))
             lib.bgen_partition_destroy(partition)
         lib.bgen_metafile_close(mf)
-    finally:
-        if mf_path.exists():
-            mf_path.unlink()
     offsets.sort()
     if limit is not None:
         return offsets[:limit]
