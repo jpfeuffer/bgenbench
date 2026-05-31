@@ -21,7 +21,7 @@ if [[ ! -x "${PLINK2_BIN}" ]]; then
   if command -v plink2 >/dev/null 2>&1; then
     PLINK2_BIN="$(command -v plink2)"
   else
-    curl -fsSL -o "${TOOLS_DIR}/plink2.zip" "https://s3.amazonaws.com/plink2-assets/alpha5/plink2_linux_avx2_20260425.zip"
+    curl -fsSL -o "${TOOLS_DIR}/plink2.zip" "https://s3.amazonaws.com/plink2-assets/alpha7/plink2_linux_avx2_20260504.zip"
     unzip -o "${TOOLS_DIR}/plink2.zip" -d "${TOOLS_DIR}"
     chmod +x "${PLINK2_BIN}"
   fi
