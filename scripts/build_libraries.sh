@@ -60,47 +60,4 @@ if [[ ! -x "${THIRD_PARTY_DIR}/gavinband-bgen/build/apps/bgenix" ]]; then
   popd >/dev/null
 fi
 
-# ── Compile bench_gavin C++ benchmark binary ─────────────────────────────────
-GAVIN_DIR="${THIRD_PARTY_DIR}/gavinband-bgen"
-BENCH_SRC="${ROOT_DIR}/benchmarks/bench_gavin.cpp"
-BENCH_BIN="${BUILD_DIR}/bench_gavin"
-
-if [[ ! -x "${BENCH_BIN}" ]]; then
-  LIBBGEN=""
-  for candidate in \
-      "${GAVIN_DIR}/build/src/libbgen.a" \
-      "${GAVIN_DIR}/build/src/libbgen_static.a" \
-      "${GAVIN_DIR}/build/apps/libbgen.a"; do
-    if [[ -f "${candidate}" ]]; then
-      LIBBGEN="${candidate}"
-      break
-    fi
-  done
-  [[ -z "${LIBBGEN}" ]] && LIBBGEN="$(find "${GAVIN_DIR}/build" -name "libbgen*.a" | head -1 || true)"
-
-  if [[ -z "${LIBBGEN}" ]]; then
-    echo "Could not locate libbgen.a – skipping bench_gavin compilation" >&2
-  else
-    GAVIN_INC="${GAVIN_DIR}/genfile/include"
-    EXTRA_INC=""
-    [[ -d "${GAVIN_DIR}/db/include" ]] && EXTRA_INC="-I${GAVIN_DIR}/db/include"
-    ZLIB_FLAG=""
-    [[ -d "${GAVIN_DIR}/3rd_party/zlib-1.2.11" ]] && ZLIB_FLAG="-I${GAVIN_DIR}/3rd_party/zlib-1.2.11"
-
-    ${CXX:-g++} ${CXXFLAGS} -std=c++11 \
-      -I"${GAVIN_INC}" ${EXTRA_INC} ${ZLIB_FLAG} \
-      -o "${BENCH_BIN}" \
-      "${BENCH_SRC}" \
-      "${LIBBGEN}" \
-      -lsqlite3 -lz -lpthread \
-      2>&1 | sed "s|^|[bench_gavin] |"
-
-    if [[ -x "${BENCH_BIN}" ]]; then
-      echo "bench_gavin compiled: ${BENCH_BIN}"
-    else
-      echo "bench_gavin compilation failed – gavinband/bgen will be skipped" >&2
-    fi
-  fi
-fi
-
 echo "Libraries built successfully with CFLAGS='${CFLAGS}' and CXXFLAGS='${CXXFLAGS}'."
