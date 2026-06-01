@@ -33,24 +33,74 @@ fi
 python3 -m venv "${VENV_DIR}/jeremy"
 python3 -m venv "${VENV_DIR}/limix"
 
-"${VENV_DIR}/jeremy/bin/pip" install --upgrade pip setuptools wheel cython numpy
-"${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/jeremymcrae-bgen"
+if ! "${VENV_DIR}/jeremy/bin/python" -c "import bgen" 2>/dev/null; then
+  "${VENV_DIR}/jeremy/bin/pip" install --upgrade pip setuptools wheel cython numpy
+  "${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/jeremymcrae-bgen"
+fi
 
-cmake -S "${THIRD_PARTY_DIR}/limix-bgen" -B "${BUILD_DIR}/limix-bgen" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="${CFLAGS}" -DCMAKE_CXX_FLAGS="${CXXFLAGS}"
-cmake --build "${BUILD_DIR}/limix-bgen" --parallel
+if [[ ! -f "${BUILD_DIR}/limix-bgen/CMakeCache.txt" ]]; then
+  cmake -S "${THIRD_PARTY_DIR}/limix-bgen" -B "${BUILD_DIR}/limix-bgen" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="${CFLAGS}" -DCMAKE_CXX_FLAGS="${CXXFLAGS}"
+fi
+if [[ -z "$(find "${BUILD_DIR}/limix-bgen" -name "libbgen*.a" -o -name "libbgen*.so" 2>/dev/null | head -1)" ]]; then
+  cmake --build "${BUILD_DIR}/limix-bgen" --parallel
+fi
 
-"${VENV_DIR}/limix/bin/pip" install --upgrade pip setuptools wheel cffi numpy
-"${VENV_DIR}/limix/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
-"${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
-
-pushd "${THIRD_PARTY_DIR}/gavinband-bgen" >/dev/null
-./waf configure CC="${CC:-gcc}" CXX="${CXX:-g++}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}"
-./waf
-popd >/dev/null
+if ! "${VENV_DIR}/limix/bin/python" -c "import cbgen" 2>/dev/null; then
+  "${VENV_DIR}/limix/bin/pip" install --upgrade pip setuptools wheel cffi numpy
+  "${VENV_DIR}/limix/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
+fi
+if ! "${VENV_DIR}/jeremy/bin/python" -c "import cbgen" 2>/dev/null; then
+  "${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
+fi
 
 if [[ ! -x "${THIRD_PARTY_DIR}/gavinband-bgen/build/apps/bgenix" ]]; then
-  echo "bgenix build output not found" >&2
-  exit 1
+  pushd "${THIRD_PARTY_DIR}/gavinband-bgen" >/dev/null
+  ./waf configure CC="${CC:-gcc}" CXX="${CXX:-g++}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}"
+  ./waf
+  popd >/dev/null
+fi
+
+# ── Compile bench_gavin C++ benchmark binary ─────────────────────────────────
+GAVIN_DIR="${THIRD_PARTY_DIR}/gavinband-bgen"
+BENCH_SRC="${ROOT_DIR}/benchmarks/bench_gavin.cpp"
+BENCH_BIN="${BUILD_DIR}/bench_gavin"
+
+if [[ ! -x "${BENCH_BIN}" ]]; then
+  LIBBGEN=""
+  for candidate in \
+      "${GAVIN_DIR}/build/src/libbgen.a" \
+      "${GAVIN_DIR}/build/src/libbgen_static.a" \
+      "${GAVIN_DIR}/build/apps/libbgen.a"; do
+    if [[ -f "${candidate}" ]]; then
+      LIBBGEN="${candidate}"
+      break
+    fi
+  done
+  [[ -z "${LIBBGEN}" ]] && LIBBGEN="$(find "${GAVIN_DIR}/build" -name "libbgen*.a" | head -1 || true)"
+
+  if [[ -z "${LIBBGEN}" ]]; then
+    echo "Could not locate libbgen.a – skipping bench_gavin compilation" >&2
+  else
+    GAVIN_INC="${GAVIN_DIR}/genfile/include"
+    EXTRA_INC=""
+    [[ -d "${GAVIN_DIR}/db/include" ]] && EXTRA_INC="-I${GAVIN_DIR}/db/include"
+    ZLIB_FLAG=""
+    [[ -d "${GAVIN_DIR}/3rd_party/zlib-1.2.11" ]] && ZLIB_FLAG="-I${GAVIN_DIR}/3rd_party/zlib-1.2.11"
+
+    ${CXX:-g++} ${CXXFLAGS} -std=c++11 \
+      -I"${GAVIN_INC}" ${EXTRA_INC} ${ZLIB_FLAG} \
+      -o "${BENCH_BIN}" \
+      "${BENCH_SRC}" \
+      "${LIBBGEN}" \
+      -lsqlite3 -lz -lpthread \
+      2>&1 | sed "s|^|[bench_gavin] |"
+
+    if [[ -x "${BENCH_BIN}" ]]; then
+      echo "bench_gavin compiled: ${BENCH_BIN}"
+    else
+      echo "bench_gavin compilation failed – gavinband/bgen will be skipped" >&2
+    fi
+  fi
 fi
 
 echo "Libraries built successfully with CFLAGS='${CFLAGS}' and CXXFLAGS='${CXXFLAGS}'."
