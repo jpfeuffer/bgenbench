@@ -72,8 +72,8 @@ struct NullSetter {
     bool set_sample(std::size_t /*i*/) { return true; }
     void set_number_of_entries(
         std::size_t /*ploidy*/, std::size_t /*n_entries*/,
-        genfile::bgen::OrderType /*order_type*/,
-        genfile::bgen::ValueType /*value_type*/) {}
+        genfile::OrderType /*order_type*/,
+        genfile::ValueType /*value_type*/) {}
     void set_value(std::size_t /*g*/, double /*value*/) {}
     void set_value(std::size_t /*g*/, genfile::MissingValue) {}
 };
