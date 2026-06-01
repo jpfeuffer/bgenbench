@@ -65,6 +65,19 @@ static std::vector<int64_t> get_offsets(const std::string& bgi_path, int limit =
     return offsets;
 }
 
+// ── No-op probability setter ─────────────────────────────────────────────────
+// parse_probability_data requires a Setter concept with these four methods.
+struct NullSetter {
+    void initialise(std::size_t /*n_samples*/, std::size_t /*n_alleles*/) {}
+    bool set_sample(std::size_t /*i*/) { return true; }
+    void set_number_of_entries(
+        std::size_t /*ploidy*/, std::size_t /*n_entries*/,
+        genfile::bgen::OrderType /*order_type*/,
+        genfile::bgen::ValueType /*value_type*/) {}
+    void set_value(std::size_t /*g*/, double /*value*/) {}
+    void set_value(std::size_t /*g*/, genfile::MissingValue) {}
+};
+
 // ── One variant read ─────────────────────────────────────────────────────────
 // Reads variant identifying data + full genotype probability block at `offset`.
 
@@ -93,10 +106,7 @@ static void read_variant_at(
     genfile::bgen::uncompress_probability_data(context, geno_buf, &uncomp_buf);
 
     // Parse probabilities (forces full decode of the block).
-    // Lambda must be stored as a named variable because parse_probability_data
-    // takes Setter by non-const lvalue reference and cannot bind to an rvalue.
-    auto setter = [](std::size_t /*sample*/, std::size_t /*allele*/,
-                     double const* /*probs*/, std::size_t /*n_probs*/) {};
+    NullSetter setter;
     genfile::bgen::parse_probability_data(
         uncomp_buf.data(),
         uncomp_buf.data() + uncomp_buf.size(),
