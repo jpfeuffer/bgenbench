@@ -46,6 +46,32 @@ def _get_offsets_from_bgi(path: Path, limit: int | None = None) -> list[int]:
     return rows
 
 
+def _get_genotype_offsets(bgen_path: Path, bgi_path: Path, limit: int | None = None) -> list[int]:
+    """Get genotype data offsets using cbgen's metafile (not bgi file_start_position)."""
+    import cbgen  # type: ignore
+    from cbgen._ffi import ffi, lib  # type: ignore
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mf_path = Path(tmpdir) / "variants.metafile"
+        with cbgen.bgen_file(bgen_path) as bgen:
+            bgen.create_metafile(mf_path)
+        mf = lib.bgen_metafile_open(bytes(mf_path))
+        nparts = lib.bgen_metafile_npartitions(mf)
+        offsets: list[int] = []
+        for p in range(nparts):
+            partition = lib.bgen_metafile_read_partition(mf, p)
+            nvars = lib.bgen_partition_nvariants(partition)
+            for i in range(nvars):
+                vm = lib.bgen_partition_get_variant(partition, i)
+                offsets.append(int(vm.genotype_offset))
+            lib.bgen_partition_destroy(partition)
+        lib.bgen_metafile_close(mf)
+    offsets.sort()
+    if limit is not None:
+        return offsets[:limit]
+    return offsets
+
+
 def _safe_backend(name: str, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return {"name": name, "status": "ok", "metrics": run()}
@@ -80,23 +106,23 @@ def _bench_jeremy(cfg: BenchmarkConfig) -> dict[str, Any]:
         def consecutive() -> None:
             width = min(64, variant_count)
             for start in range(0, min(variant_count, 1024), width):
-                for variant in reader[int(start) : int(min(start + width, variant_count))]:
-                    _ = variant.minor_allele_dosage
+                for i in range(int(start), int(min(start + width, variant_count))):
+                    _ = reader[i].minor_allele_dosage
 
         random_ids = [rng.randrange(variant_count) for _ in range(min(128, variant_count))]
 
         def random_single() -> None:
             for index in random_ids:
-                _ = reader[index].minor_allele_dosage
+                _ = reader[int(index)].minor_allele_dosage
 
         def random_slices() -> None:
             for index in random_ids[:64]:
-                for variant in reader[int(index) : int(min(index + 8, variant_count))]:
-                    _ = variant.minor_allele_dosage
+                for i in range(int(index), int(min(index + 8, variant_count))):
+                    _ = reader[i].minor_allele_dosage
 
         def full_load() -> None:
             for index in range(min(cfg.full_load_max_variants, variant_count)):
-                _ = reader[index].minor_allele_dosage
+                _ = reader[int(index)].minor_allele_dosage
 
         return {
             "metadata": _timed(metadata),
@@ -111,7 +137,7 @@ def _bench_jeremy(cfg: BenchmarkConfig) -> dict[str, Any]:
 def _bench_cbgen(cfg: BenchmarkConfig) -> dict[str, Any]:
     import cbgen  # type: ignore
 
-    offsets = _get_offsets_from_bgi(cfg.bgi_path)
+    offsets = _get_genotype_offsets(cfg.bgen_path, cfg.bgi_path)
     if not offsets:
         raise BenchmarkError("index contains no variants")
 
