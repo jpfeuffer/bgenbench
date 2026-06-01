@@ -3,8 +3,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THIRD_PARTY_DIR="${ROOT_DIR}/third_party"
 GAVIN_DIR="${THIRD_PARTY_DIR}/gavinband-bgen"
 BENCH_SRC="${ROOT_DIR}/benchmarks/bench_gavin.cpp"
-BENCH_BIN="${BUILD_DIR}/bench_gavin"
 BUILD_DIR="${ROOT_DIR}/build"
+BENCH_BIN="${BUILD_DIR}/bench_gavin"
 VENV_DIR="${ROOT_DIR}/.venv"
 
 # Locate the bgen static library produced by waf.
