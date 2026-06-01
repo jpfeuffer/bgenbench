@@ -93,12 +93,15 @@ static void read_variant_at(
     genfile::bgen::uncompress_probability_data(context, geno_buf, &uncomp_buf);
 
     // Parse probabilities (forces full decode of the block).
+    // Lambda must be stored as a named variable because parse_probability_data
+    // takes Setter by non-const lvalue reference and cannot bind to an rvalue.
+    auto setter = [](std::size_t /*sample*/, std::size_t /*allele*/,
+                     double const* /*probs*/, std::size_t /*n_probs*/) {};
     genfile::bgen::parse_probability_data(
         uncomp_buf.data(),
         uncomp_buf.data() + uncomp_buf.size(),
         context,
-        [](std::size_t /*sample*/, std::size_t /*allele*/,
-           double const* /*probs*/, std::size_t /*n_probs*/) {}
+        setter
     );
 }
 
