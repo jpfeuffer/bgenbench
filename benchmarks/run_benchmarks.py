@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import bisect
+import json
 import random
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -23,8 +24,7 @@ class BenchmarkConfig:
     output_dir: Path
     full_load_max_variants: int
     random_seed: int
-    gavin_bgenix: Path
-    plink2_bin: Path | None
+    gavin_bench_bin: Path
 
 
 class BenchmarkError(RuntimeError):
@@ -124,16 +124,15 @@ def _bench_jeremy(cfg: BenchmarkConfig) -> dict[str, Any]:
             for index in range(min(cfg.full_load_max_variants, variant_count)):
                 _ = reader[int(index)].minor_allele_dosage
 
+        full_load_n = min(cfg.full_load_max_variants, variant_count)
         return {
             "metadata": _timed(metadata),
             "consecutive_slices": _timed(consecutive),
             "random_single": _timed(random_single),
             "random_slices": _timed(random_slices),
             "full_load": _timed(full_load),
-            "notes": f"variants={variant_count}",
+            "notes": f"variants={variant_count},full_load_n={full_load_n}",
         }
-
-
 def _bench_cbgen(cfg: BenchmarkConfig) -> dict[str, Any]:
     import cbgen  # type: ignore
 
@@ -159,153 +158,44 @@ def _bench_cbgen(cfg: BenchmarkConfig) -> dict[str, Any]:
 
         def random_slices() -> None:
             for offset in random_offsets[:64]:
-                _ = bgen.read_probability(offset)
+                idx = bisect.bisect_left(offsets, offset)
+                for o in offsets[idx : idx + 8]:
+                    _ = bgen.read_probability(o)
 
         def full_load() -> None:
             for offset in offsets[: min(cfg.full_load_max_variants, len(offsets))]:
                 _ = bgen.read_probability(offset)
 
+        full_load_n = min(cfg.full_load_max_variants, len(offsets))
         return {
             "metadata": _timed(metadata),
             "consecutive_slices": _timed(consecutive),
             "random_single": _timed(random_single),
             "random_slices": _timed(random_slices),
             "full_load": _timed(full_load),
-            "notes": f"variants={len(offsets)}",
+            "notes": f"variants={len(offsets)},full_load_n={full_load_n}",
         }
 
 
 def _bench_gavin(cfg: BenchmarkConfig) -> dict[str, Any]:
-    if not cfg.gavin_bgenix.exists():
-        raise BenchmarkError(f"missing bgenix at {cfg.gavin_bgenix}")
+    if not cfg.gavin_bench_bin.exists():
+        raise BenchmarkError(f"missing bench_gavin binary at {cfg.gavin_bench_bin}")
 
-    with sqlite3.connect(cfg.bgi_path) as conn:
-        rows = conn.execute(
-            "SELECT chromosome, position FROM Variant ORDER BY position LIMIT 2048"
-        ).fetchall()
-    if not rows:
-        raise BenchmarkError("no chromosome/position data in index")
-
-    rng = random.Random(cfg.random_seed)
-
-    def run_cmd(*args: str) -> None:
-        subprocess.run(
-            [str(cfg.gavin_bgenix), "-g", str(cfg.bgen_path), *args],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-    def metadata() -> None:
-        run_cmd("-list")
-
-    def consecutive() -> None:
-        chrom = str(rows[0][0])
-        start = int(rows[0][1])
-        stop_index = min(256, len(rows) - 1)
-        stop = int(rows[stop_index][1])
-        run_cmd("-incl-range", f"{chrom}:{start}-{stop}")
-
-    random_rows = [rng.choice(rows) for _ in range(min(128, len(rows)))]
-
-    def random_single() -> None:
-        for chrom, pos in random_rows:
-            run_cmd("-incl-range", f"{chrom}:{pos}-{pos}")
-
-    def random_slices() -> None:
-        for chrom, pos in random_rows[:64]:
-            run_cmd("-incl-range", f"{chrom}:{pos}-{int(pos) + 10000}")
-
-    def full_load() -> None:
-        start = int(rows[0][1])
-        end = int(rows[-1][1])
-        chrom = str(rows[0][0])
-        run_cmd("-incl-range", f"{chrom}:{start}-{end}")
-
-    return {
-        "metadata": _timed(metadata),
-        "consecutive_slices": _timed(consecutive),
-        "random_single": _timed(random_single),
-        "random_slices": _timed(random_slices),
-        "full_load": _timed(full_load),
-        "notes": f"positions={len(rows)}",
-    }
-
-
-def _bench_plink2(cfg: BenchmarkConfig) -> dict[str, Any]:
-    if cfg.plink2_bin is not None and cfg.plink2_bin.is_file():
-        plink2_bin = str(cfg.plink2_bin)
-    else:
-        found = shutil.which("plink2")
-        if found is None:
-            raise BenchmarkError("plink2 not found")
-        plink2_bin = found
-
-    sample_path = cfg.bgen_path.with_suffix(".sample")
-    if not sample_path.exists():
-        raise BenchmarkError(f"missing sample file at {sample_path}")
-
-    with sqlite3.connect(cfg.bgi_path) as conn:
-        rows = conn.execute(
-            "SELECT chromosome, position FROM Variant ORDER BY position LIMIT 2048"
-        ).fetchall()
-    if not rows:
-        raise BenchmarkError("no chromosome/position data in index")
-
-    rng = random.Random(cfg.random_seed)
-
-    with tempfile.TemporaryDirectory() as _tmpdir:
-        tmpdir = Path(_tmpdir)
-
-        base_args = [
-            "--bgen", str(cfg.bgen_path), "ref-first",
-            "--sample", str(sample_path),
-            "--allow-extra-chr",
-            "--no-psam-pheno",
-        ]
-
-        def run_plink2(*args: str) -> None:
-            subprocess.run(
-                [plink2_bin, *base_args, "--out", str(tmpdir / "plink2_bench"), *args],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-        chrom0 = str(rows[0][0])
-        pos0 = int(rows[0][1])
-
-        def metadata() -> None:
-            run_plink2("--chr", chrom0, "--from-bp", str(pos0), "--to-bp", str(pos0), "--freq")
-
-        def consecutive() -> None:
-            chrom = str(rows[0][0])
-            start = int(rows[0][1])
-            stop_index = min(256, len(rows) - 1)
-            stop = int(rows[stop_index][1])
-            run_plink2("--chr", chrom, "--from-bp", str(start), "--to-bp", str(stop), "--freq")
-
-        random_rows = [rng.choice(rows) for _ in range(min(128, len(rows)))]
-
-        def random_single() -> None:
-            for chrom, pos in random_rows:
-                run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos)), "--freq")
-
-        def random_slices() -> None:
-            for chrom, pos in random_rows[:64]:
-                run_plink2("--chr", str(chrom), "--from-bp", str(int(pos)), "--to-bp", str(int(pos) + 10000), "--freq")
-
-        def full_load() -> None:
-            run_plink2("--freq")
-
-        return {
-            "metadata": _timed(metadata),
-            "consecutive_slices": _timed(consecutive),
-            "random_single": _timed(random_single),
-            "random_slices": _timed(random_slices),
-            "full_load": _timed(full_load),
-            "notes": f"positions={len(rows)}",
-        }
+    result = subprocess.run(
+        [
+            str(cfg.gavin_bench_bin),
+            "--bgen", str(cfg.bgen_path),
+            "--bgi", str(cfg.bgi_path),
+            "--full-load-max-variants", str(cfg.full_load_max_variants),
+            "--random-seed", str(cfg.random_seed),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    metrics: dict[str, Any] = json.loads(result.stdout)
+    return metrics
 
 
 def parse_args(argv: list[str]) -> BenchmarkConfig:
@@ -315,8 +205,7 @@ def parse_args(argv: list[str]) -> BenchmarkConfig:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--full-load-max-variants", type=int, default=2000)
     parser.add_argument("--random-seed", type=int, default=1)
-    parser.add_argument("--gavin-bgenix", type=Path, required=True)
-    parser.add_argument("--plink2-bin", type=Path, default=None)
+    parser.add_argument("--gavin-bench-bin", type=Path, required=True)
     args = parser.parse_args(argv)
     return BenchmarkConfig(
         bgen_path=args.bgen,
@@ -324,8 +213,7 @@ def parse_args(argv: list[str]) -> BenchmarkConfig:
         output_dir=args.output_dir,
         full_load_max_variants=args.full_load_max_variants,
         random_seed=args.random_seed,
-        gavin_bgenix=args.gavin_bgenix,
-        plink2_bin=args.plink2_bin,
+        gavin_bench_bin=args.gavin_bench_bin,
     )
 
 
@@ -342,7 +230,6 @@ def main(argv: list[str]) -> int:
             _safe_backend("jeremymcrae/bgen", lambda: _bench_jeremy(cfg)),
             _safe_backend("limix/cbgen", lambda: _bench_cbgen(cfg)),
             _safe_backend("gavinband/bgen", lambda: _bench_gavin(cfg)),
-            _safe_backend("plink2", lambda: _bench_plink2(cfg)),
         ],
     }
 
