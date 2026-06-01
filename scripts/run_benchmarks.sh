@@ -6,6 +6,7 @@ OUTPUT_DIR="${ROOT_DIR}/outputs"
 mkdir -p "${OUTPUT_DIR}"
 
 "${ROOT_DIR}/scripts/build_libraries.sh"
+"${ROOT_DIR}/scripts/build_gavinbench.sh"
 "${ROOT_DIR}/scripts/prepare_large_bgen.sh"
 
 BGEN_PATH="${BGENBENCH_DATASET_PREFIX:-${ROOT_DIR}/data/chr1_1000g}.bgen"
