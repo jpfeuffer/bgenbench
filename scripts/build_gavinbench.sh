@@ -42,7 +42,7 @@ else
     -o "${BENCH_BIN}" \
     "${BENCH_SRC}" \
     "${LIBBGEN}" \
-    -lsqlite3 -lz -lpthread \
+    -lsqlite3 -lz -lzstd -lpthread \
     2>&1 | sed "s|^|[bench_gavin] |"
 
   if [[ -x "${BENCH_BIN}" ]]; then
