@@ -33,24 +33,31 @@ fi
 python3 -m venv "${VENV_DIR}/jeremy"
 python3 -m venv "${VENV_DIR}/limix"
 
-"${VENV_DIR}/jeremy/bin/pip" install --upgrade pip setuptools wheel cython numpy
-"${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/jeremymcrae-bgen"
+if ! "${VENV_DIR}/jeremy/bin/python" -c "import bgen" 2>/dev/null; then
+  "${VENV_DIR}/jeremy/bin/pip" install --upgrade pip setuptools wheel cython numpy
+  "${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/jeremymcrae-bgen"
+fi
 
-cmake -S "${THIRD_PARTY_DIR}/limix-bgen" -B "${BUILD_DIR}/limix-bgen" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="${CFLAGS}" -DCMAKE_CXX_FLAGS="${CXXFLAGS}"
-cmake --build "${BUILD_DIR}/limix-bgen" --parallel
+if [[ ! -f "${BUILD_DIR}/limix-bgen/CMakeCache.txt" ]]; then
+  cmake -S "${THIRD_PARTY_DIR}/limix-bgen" -B "${BUILD_DIR}/limix-bgen" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="${CFLAGS}" -DCMAKE_CXX_FLAGS="${CXXFLAGS}"
+fi
+if [[ -z "$(find "${BUILD_DIR}/limix-bgen" -name "libbgen*.a" -o -name "libbgen*.so" 2>/dev/null | head -1)" ]]; then
+  cmake --build "${BUILD_DIR}/limix-bgen" --parallel
+fi
 
-"${VENV_DIR}/limix/bin/pip" install --upgrade pip setuptools wheel cffi numpy
-"${VENV_DIR}/limix/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
-"${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
-
-pushd "${THIRD_PARTY_DIR}/gavinband-bgen" >/dev/null
-./waf configure CC="${CC:-gcc}" CXX="${CXX:-g++}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}"
-./waf
-popd >/dev/null
+if ! "${VENV_DIR}/limix/bin/python" -c "import cbgen" 2>/dev/null; then
+  "${VENV_DIR}/limix/bin/pip" install --upgrade pip setuptools wheel cffi numpy
+  "${VENV_DIR}/limix/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
+fi
+if ! "${VENV_DIR}/jeremy/bin/python" -c "import cbgen" 2>/dev/null; then
+  "${VENV_DIR}/jeremy/bin/pip" install --no-binary :all: "${THIRD_PARTY_DIR}/limix-cbgen"
+fi
 
 if [[ ! -x "${THIRD_PARTY_DIR}/gavinband-bgen/build/apps/bgenix" ]]; then
-  echo "bgenix build output not found" >&2
-  exit 1
+  pushd "${THIRD_PARTY_DIR}/gavinband-bgen" >/dev/null
+  ./waf configure CC="${CC:-gcc}" CXX="${CXX:-g++}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}"
+  ./waf
+  popd >/dev/null
 fi
 
 echo "Libraries built successfully with CFLAGS='${CFLAGS}' and CXXFLAGS='${CXXFLAGS}'."

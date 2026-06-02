@@ -11,10 +11,11 @@ SMALL_PREFIX="${DATA_DIR}/test_small"
 BGEN_PATH="${SMALL_PREFIX}.bgen"
 BGI_PATH="${SMALL_PREFIX}.bgen.bgi"
 BGENIX="${ROOT_DIR}/third_party/gavinband-bgen/build/apps/bgenix"
+GAVIN_BENCH_BIN="${ROOT_DIR}/build/bench_gavin"
 
 mkdir -p "${DATA_DIR}" "${TOOLS_DIR}" "${OUTPUT_DIR}"
 
-# ── Locate or download plink2 ────────────────────────────────────────────────
+# ── Locate or download plink2 (used only to generate the synthetic BGEN) ─────
 PLINK2_BIN="${TOOLS_DIR}/plink2"
 if [[ ! -x "${PLINK2_BIN}" ]]; then
   if command -v plink2 >/dev/null 2>&1; then
@@ -29,7 +30,7 @@ if [[ ! -x "${PLINK2_BIN}" ]]; then
 fi
 
 # ── Build libraries if not already built ────────────────────────────────────
-if [[ ! -x "${BGENIX}" ]]; then
+if [[ ! -x "${BGENIX}" ]] || [[ ! -x "${GAVIN_BENCH_BIN}" ]]; then
   echo "Libraries not found – running build_libraries.sh first..."
   chmod +x "${ROOT_DIR}/scripts/build_libraries.sh"
   "${ROOT_DIR}/scripts/build_libraries.sh"
@@ -56,19 +57,13 @@ fi
 
 # ── Run smoke-test benchmark ─────────────────────────────────────────────────
 echo "Running smoke-test benchmark on ${BGEN_PATH}..."
-PLINK2_ARG=""
-if [[ -x "${PLINK2_BIN}" ]]; then
-  PLINK2_ARG="--plink2-bin ${PLINK2_BIN}"
-fi
 
-# shellcheck disable=SC2086
 "${ROOT_DIR}/.venv/jeremy/bin/python" "${ROOT_DIR}/benchmarks/run_benchmarks.py" \
   --bgen "${BGEN_PATH}" \
   --bgi "${BGI_PATH}" \
-  --gavin-bgenix "${BGENIX}" \
+  --gavin-bench-bin "${GAVIN_BENCH_BIN}" \
   --output-dir "${OUTPUT_DIR}" \
-  --full-load-max-variants 100 \
-  ${PLINK2_ARG}
+  --full-load-max-variants 100
 
 echo ""
 echo "Smoke test complete. Results written to ${OUTPUT_DIR}."
